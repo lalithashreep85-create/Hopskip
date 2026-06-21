@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HopSkip - Walk or Wait for DSPUC?</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+           background: #0f172a; color: white; margin: 0; padding: 20px; text-align: center; }
+   .card { background: #1e293b; max-width: 400px; margin: 20px auto; padding: 30px; 
+            border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    h1 { margin: 0 0 10px; font-size: 32px; }
+   .status { font-size: 48px; font-weight: 800; margin: 20px 0; }
+   .walk { color: #22c55e; }
+   .wait { color: #f97316; }
+   .sub { opacity: 0.7; font-size: 14px; margin: 5px 0 20px; }
+    button { width: 100%; padding: 16px; margin: 8px 0; border: none; border-radius: 12px; 
+             font-size: 18px; font-weight: 600; cursor: pointer; }
+   .btn-bus { background: #3b82f6; color: white; }
+   .btn-walk { background: #22c55e; color: white; }
+   .btn-reset { background: #64748b; color: white; font-size: 14px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HopSkip</h1>
+    <p class="sub">Should you Walk or Wait for the bus to DSPUC?</p>
+    <div id="status" class="status">Loading...</div>
+    <div id="detail" class="sub">Connecting to live data...</div>
+    
+    <button class="btn-bus" onclick="logBus()">🚌 Bus Just Left</button>
+    <button class="btn-walk" onclick="logWalk()">🚶 Started Walking</button>
+    <button class="btn-reset" onclick="resetData()">Reset Today's Data</button>
+    
+    <p class="sub" style="margin-top:30px">For Siruguppa → DSPUC | Made for DERBI Hackathon</p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+    import { getDatabase, ref, push, get, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8fSJHdjgc6iMkonKo6Zn4sJbQ_Swvd-c",
+      authDomain: "hopskipcom.firebaseapp.com",
+      databaseURL: "https://hopskipcom-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "hopskipcom",
+      storageBucket: "hopskipcom.firebasestorage.app",
+      messagingSenderId: "802894701320",
+      appId: "1:802894701320:web:0bb6e8aa046646c77582bd",
+      measurementId: "G-YRJYL23V5D"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const WALK_TIME = 15; // minutes from Siruguppa to DSPUC
+    let today = new Date().toISOString().slice(0,10);
+
+    async function updateStatus() {
+      const busSnap = await get(ref(db, `bus/${today}`));
+      let busTimes = busSnap.exists()? Object.values(busSnap.val()) : [];
+      let lastBus = busTimes.length? Math.max(...busTimes) : 0;
+      let avgGap = busTimes.length > 1? 
+        (busTimes[busTimes.length-1] - busTimes[0]) / (busTimes.length-1) / 60000 : 25;
+      
+      let nextBusETA = lastBus? Math.round((lastBus + avgGap*60000 - Date.now()) / 60000) : -1;
+      let statusEl = document.getElementById('status');
+      let detailEl = document.getElementById('detail');
+      
+      if (nextBusETA <= 0 || nextBusETA > WALK_TIME) {
+        statusEl.textContent = "WALK";
+        statusEl.className = "status walk";
+        detailEl.textContent = nextBusETA <= 0? "No bus data yet. Walking is faster." : `Next bus in ~${nextBusETA} min. Walk takes ${WALK_TIME} min.`;
+      } else {
+        statusEl.textContent = "WAIT";
+        statusEl.className = "status wait";
+        detailEl.textContent = `Next bus in ~${nextBusETA} min. Walking takes ${WALK_TIME} min.`;
+      }
+    }
+
+    window.logBus = () => {
+      push(ref(db, `bus/${today}`), Date.now());
+      updateStatus();
+    }
+    
+    window.logWalk = () => {
+      push(ref(db, `walk/${today}`), Date.now());
+      alert("Walk logged! If you beat the bus, you're proving the point 💪");
+    }
+    
+    window.resetData = () => {
+      if(confirm("Reset today's data?")) {
+        set(ref(db, `bus/${today}`), null);
+        set(ref(db, `walk/${today}`), null);
+        updateStatus();
+      }
+    }
+
+    updateStatus();
+    setInterval(updateStatus, 30000);
+  </script>
+</body>
+</html>
